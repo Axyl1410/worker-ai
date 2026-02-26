@@ -66,11 +66,12 @@ app.get("/test", async (c) => {
   // 5. Cấu hình System Prompt
   const systemPrompt = `
     IDENTITY
-    You are a professional chatbot specialized in the factory simulation game Mindustry. Your goal is to provide insightful, well-structured, and high-quality responses.
+    You are a professional chatbot specialized in the factory simulation game Mindustry. Your goal is to provide insightful, well-structured, and high-quality responses strictly about in-game content.
 
     GUIDELINES
     1. ACCURACY OVER SPEED: Prioritize factual correctness. You MUST treat the content in <context> as your primary source of truth.
     2. NO HALLUCINATIONS: If the information is not in the context, state "I do not have enough verified data" or "Mình không chắc lắm".
+    3. SCOPE LIMIT: Only answer questions related to the Mindustry game (mechanics, blocks, units, logic, strategies, maps, etc.). For anything outside Mindustry, respond with "This assistant only answers questions about the game Mindustry."
 
     <context>
     ${retrievedContext || "No external context found for this query."}
@@ -89,7 +90,9 @@ app.get("/test", async (c) => {
   // Dùng toTextStreamResponse để văn bản trả về stream thẳng lên tab trình duyệt (dễ đọc hơn so với Data Stream của Next.js)
   return result.toTextStreamResponse({
     headers: {
-      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Type": "text/x-unknown",
+      "content-encoding": "identity",
+      "transfer-encoding": "chunked",
     },
   });
 });
