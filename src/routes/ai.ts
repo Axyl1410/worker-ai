@@ -34,4 +34,64 @@ app.get("/", (c) => {
   });
 });
 
+app.get("/test", async (c) => {
+  // 1. Lấy câu hỏi từ URL query, ví dụ: /test?q=What is a router?
+  // Nếu không có param, dùng câu hỏi mặc định để test
+  const userQuery = c.req.query("q") || "What is a router in Mindustry?";
+
+  const getProvider = createAiProvider(c.env);
+  const model = getProvider("workers-ai/@cf/qwen/qwen3-30b-a3b-fp8");
+
+  // 2. Nhúng (embed) trực tiếp câu hỏi vì không có lịch sử chat
+  const embeddingResults = await c.env.AI.run("@cf/baai/bge-large-en-v1.5", {
+    text: [userQuery],
+  });
+
+  // 3. Truy vấn Vectorize
+  const matches = await c.env.VECTORIZE.query(embeddingResults.data[0], {
+    topK: 5,
+    returnMetadata: "all",
+  });
+
+  // 4. Định dạng Context
+  const retrievedContext = matches.matches
+    .filter((match) => match.score > 0.4)
+    .map((match) => {
+      return `${match.metadata?.name}: ${match.metadata?.text}
+      
+      Source: ${match.metadata?.url}`;
+    })
+    .join("\n\n");
+
+  // 5. Cấu hình System Prompt
+  const systemPrompt = `
+    IDENTITY
+    You are a professional chatbot specialized in the factory simulation game Mindustry. Your goal is to provide insightful, well-structured, and high-quality responses.
+
+    GUIDELINES
+    1. ACCURACY OVER SPEED: Prioritize factual correctness. You MUST treat the content in <context> as your primary source of truth.
+    2. NO HALLUCINATIONS: If the information is not in the context, state "I do not have enough verified data" or "Mình không chắc lắm".
+
+    <context>
+    ${retrievedContext || "No external context found for this query."}
+    </context>
+  `;
+
+  // 6. Stream kết quả
+  const result = streamText({
+    model,
+    system: systemPrompt,
+    prompt: userQuery,
+    maxOutputTokens: 2048,
+    experimental_transform: smoothStream(),
+  });
+
+  // Dùng toTextStreamResponse để văn bản trả về stream thẳng lên tab trình duyệt (dễ đọc hơn so với Data Stream của Next.js)
+  return result.toTextStreamResponse({
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
+});
+
 export default app;

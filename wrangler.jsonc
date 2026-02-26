@@ -17,7 +17,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "ai": {
     "binding": "AI"
-  }
+  },
+  "vectorize": [
+    { "index_name": "ai-search-fancy-brook-3022", "binding": "VECTORIZE" }
+  ]
   /**
    * Smart Placement
    * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
