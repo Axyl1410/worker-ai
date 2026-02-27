@@ -72,6 +72,7 @@ app.get("/test", async (c) => {
 
   const searchResult = await c.env.AI.autorag("fancy-brook-3022").search({
     query: userQuery,
+    rewrite_query: true,
   });
 
   if (searchResult.data.length === 0) {
@@ -97,15 +98,51 @@ app.get("/test", async (c) => {
   // Join all document chunks into a single string
   const chunks = searchResult.data
     .map((item) => {
-      const data = item.content
+      let data = item.content
         .map((content) => {
           return content.text;
         })
         .join("\n\n");
 
-      return `<file name="${item.filename}">${data}</file>`;
+      data = data
+        // 1. Remove image tags ![]()
+        .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+
+        // 2. [IMPORTANT] Recover material name from URL for empty links (e.g. [](/wiki/items/3-graphite) -> Graphite)
+        .replace(
+          /\[\s*\]\([^)]*\/[0-9]+-([a-zA-Z0-9-]+)\/?\)/g,
+          (_match, itemName) => {
+            // Capitalize the first letter and replace dashes with spaces (3-phase-fabric -> Phase fabric)
+            return (
+              itemName.charAt(0).toUpperCase() +
+              itemName.slice(1).replace(/-/g, " ")
+            );
+          }
+        )
+
+        // 3. Keep the text of links that contain characters, remove the URL
+        .replace(/\[([^\]]*)\]\([^)]+\)/g, "$1")
+
+        // 4. Remove "Skip to content" text
+        .replace(/Skip to content/gi, "")
+
+        // 5. Remove redundant menu entries
+        .replace(
+          /^\s*\*\s*(Modding Classes|Blocks|Items|Liquids|Logic|Modding|Planets|Statuses|Units|Servers|Data Patches|Frequently Asked Questions|Glossary|Writing and Editing Code|Variables and Constants|Plugins & JVM Mods|Scripting|Spriting|Markup|Types|[0-9]\.0 Migration Guide).*$/gm,
+          ""
+        )
+
+        // 6. Remove extra whitespace and blank lines
+        .replace(/[ \t]+$/gm, "")
+        .replace(/[ \t]{2,}/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      return `<file name="${item.filename}">\n${data}\n</file>`;
     })
     .join("\n\n");
+
+  console.log(chunks);
 
   const result = streamText({
     model,
@@ -136,6 +173,7 @@ app.get("/test", async (c) => {
       "transfer-encoding": "chunked",
     },
   });
+  // return Response.json({ chunks });
 });
 
 export default app;
