@@ -66,7 +66,7 @@ app.get("/", (c) => {
 
 app.get("/test", async (c) => {
   const getProvider = createAiProvider(c.env);
-  const model = getProvider("workers-ai/@cf/ibm-granite/granite-4.0-h-micro");
+  const model = getProvider("workers-ai/@cf/meta/llama-3.1-8b-instruct");
 
   const userQuery = c.req.query("query") ?? "information about copper and lead";
 
@@ -75,8 +75,23 @@ app.get("/test", async (c) => {
   });
 
   if (searchResult.data.length === 0) {
-    // No matching documents
-    return Response.json({ text: `No data found for query "${userQuery}"` });
+    const result = streamText({
+      model,
+      system: `
+      You are a helpful assistant. Explain clearly to the user that no relevant data was found in the current knowledge base for their query, and suggest that they try rephrasing or asking a different question.
+      `,
+      prompt: `No data found for query: "${userQuery}". Please let the user know there is currently no matching information in the knowledge base for this query.`,
+      maxOutputTokens: 512,
+      experimental_transform: smoothStream(),
+    });
+
+    return result.toTextStreamResponse({
+      headers: {
+        "Content-Type": "text/x-unknown",
+        "content-encoding": "identity",
+        "transfer-encoding": "chunked",
+      },
+    });
   }
 
   // Join all document chunks into a single string
